@@ -52,3 +52,4 @@ copy_data_path = 'data_categories'
 
 if not os.path.isdir(copy_data_path):
     prepare_files(original_data_path, copy_data_path)
+
