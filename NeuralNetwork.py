@@ -1,19 +1,20 @@
 import tensorflow as tf
 import numpy as np
 import sys
+import os
 
 
 class NeuralNetwork:
-    def __init__(self, layer_sizes, batch_size=100, epochs=10,
-                 save_path='/tmp/model.ckpt', restore_path='/tmp/model.ckpt'):
+    def __init__(self, layer_sizes, batch_size=256, epochs=15,
+                 model_path='/tmp/model.ckpt'):
         self.h_layers = []
         self.layer_sizes = layer_sizes
         self.batch_size = batch_size
         self.epochs = epochs
-        self.save_path = save_path
-        self.restore_path = restore_path
+        self.model_path = model_path
         self.x = tf.placeholder('float')
         self.y = tf.placeholder('float')
+        self.loss_history = []
 
         i = 1
         while i < len(layer_sizes) - 1:
@@ -57,10 +58,10 @@ class NeuralNetwork:
             sess.run(tf.global_variables_initializer())
 
             for epoch in range(self.epochs):
-                if epoch != 1:
-                    saver.restore(sess, self.restore_path)
+                if epoch != 1 and os.path.isfile(self.model_path):
+                    saver.restore(sess, self.model_path)
 
-                epoch_cost = 0
+                epoch_loss = 0
 
                 i = 0
                 while i < len(data):
@@ -68,23 +69,23 @@ class NeuralNetwork:
                     batch_y = np.array(labels[i:i + self.batch_size])
 
                     _, batch_cost = sess.run([optimizer, cost], feed_dict={self.x: batch_x, self.y: batch_y})
-                    epoch_cost += batch_cost
+                    epoch_loss += batch_cost
 
                     i += self.batch_size
 
-                saver.save(sess, self.save_path)
+                saver.save(sess, self.model_path)
+                self.loss_history.append(epoch_loss)
+                sys.stdout.write('\rFinished epoch {0} out of {1} with loss: {2}'.format(
+                                 epoch + 1, self.epochs, int(epoch_loss)))
 
-                sys.stdout.write('\rFinished epoch {0} out of {1} with loss: {2} |{3}{4}|'.format(
-                                 epoch, self.epochs, int(epoch_cost), '=' * (epoch + 1), ' ' * (self.epochs - (epoch + 1))))
-
-            print('\nTraining finished, model saved in: ', self.save_path)
+            print('\nTraining finished, model saved in: ', self.model_path)
 
     def test(self, data, labels):
         saver = tf.train.Saver()
 
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
-            saver.restore(sess, self.save_path)
+            saver.restore(sess, self.model_path)
 
             prediction = self.model(self.x)
 
@@ -100,7 +101,7 @@ class NeuralNetwork:
 
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
-            saver.restore(sess, self.save_path)
+            saver.restore(sess, self.model_path)
 
             model = self.model(self.x)
             prediction = model.eval({self.x: data})
@@ -108,4 +109,3 @@ class NeuralNetwork:
             output = np.zeros(self.layer_sizes[-1])
             output[tf.argmax(prediction, 1)] = 1
             return output
-
