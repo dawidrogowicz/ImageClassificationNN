@@ -1,96 +1,62 @@
-import os
-import sys
 import numpy as np
-from PIL import Image
-from sklearn.model_selection import train_test_split
 from NeuralNetwork import NeuralNetwork
 from RNeuralNetwork import RecurrentNeuralNetwork
 import matplotlib.pyplot as plt
+import pickle
 
 
-def convert_image(img_path, grey_scale=False):
-    img = Image.open(img_path)
-    width, height = img.size
-
-    if width < height:
-        img = img.rotate(90, expand=True, resample=Image.BILINEAR)
-
-    img = img.resize((45, 30), Image.ANTIALIAS)
-
-    if grey_scale:
-        img = img.convert('L')
-        pixel_data = img.getdata()
-    else:
-        img = img.convert('RGB')
-        pixel_data = np.array(img.getdata()).flatten()
-
-    return pixel_data
+def number_to_one_hot(number):
+    output = np.zeros(10)
+    output[number] = 1
+    return output
 
 
-def prepare_files(dir_in):
-    counter = 1
-    total_dirs = len(os.listdir(dir_in)) - 1
+def prepare_files(file_path_format):
+    data_x = []
+    data_y = []
 
-    x = []
-    y = []
+    for i in range(1, 6):
+        file_path = file_path_format.format(i)
+        with open(file_path, 'rb') as f:
+            dict = pickle.load(f, encoding='bytes')
 
-    for category_dir in os.listdir(dir_in):
-        if category_dir == 'BACKGROUND_Google':
-            print('\rSkipping directory: ', category_dir)
-            continue
+        x = dict[b'data']
+        y = np.array(list(map(number_to_one_hot, dict[b'labels'])))
 
-        sys.stdout.write('\rPreparing category {0} out of {1} |{2}{3}|'
-                         .format(counter, total_dirs, '=' * counter, ' ' * (total_dirs - counter)))
+        if i < 2:
+            data_x = x
+            data_y = y
+        else:
+            data_x = np.concatenate((data_x, x))
+            data_y = np.concatenate((data_y, y))
 
-        for file_name in os.listdir('{0}/{1}'.format(dir_in, category_dir)):
-            file_path = '{0}/{1}/{2}'.format(dir_in, category_dir, file_name)
+    data_x = np.reshape(data_x, (-1, 3, 1024))
+    data_x = np.transpose(data_x, (0, 2, 1))
+    data_x = np.reshape(data_x, (-1, 3072))
 
-            if not file_name.endswith('.jpg'):
-                print('\rSkipping file: ', file_path, ' (unsupported file extension)')
-                continue
-
-            pixel_data = convert_image(file_path, grey_scale=True)
-            x.append(list(pixel_data))
-            y.append(category_dir)
-        counter += 1
-
-    return np.array(x), np.array(y)
+    return data_x, data_y
 
 
-original_data_path = '101_ObjectCategories'
-
-data_x, labels = prepare_files(original_data_path)
+train_x, train_y = prepare_files('cifar-10-batches-py/data_batch_{}')
+test_x, test_y = prepare_files('cifar-10-batches-py/test_batch')
 print('\nData obtained')
 
-label_indexes = {}
-no_categories = len(np.unique(labels))
+data_shape = np.shape(test_x)
 
-for i, label in enumerate(np.unique(labels)):
-    output_array = np.zeros(no_categories)
-    output_array[i] = 1
-    label_indexes[label] = tuple(output_array)
-
-data_y = [label_indexes[label] for label in labels]
-print('Created labels from dictionary')
-
-train_X, test_X, train_y, test_y = train_test_split(data_x, data_y, test_size=.1)
-
-no_pixels = np.shape(data_x)[1]
-
-layer_sizes = [no_pixels, 500, 500, 500, no_categories]
+layer_sizes = [data_shape[1], 5000, 3000, 1000, 10]
 
 nn = NeuralNetwork(layer_sizes, model_path='./model.ckpt')
-rnn = RecurrentNeuralNetwork(128, no_categories, 45, 30,  model_path='./model_rnn.ckpt', epochs=10)
+rnn = RecurrentNeuralNetwork(1024, 10, 32, 32,  model_path='./model_rnn.ckpt')
 
-clf = rnn
+clf = nn
 
 print('Training model')
-clf.train(train_X, train_y)
+clf.fit(train_x, train_y)
 
 plt.plot(clf.loss_history)
 plt.draw()
 
 print('Testing model')
-clf.test(test_X, test_y)
+clf.score(test_x, test_y)
 
 plt.show()

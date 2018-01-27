@@ -5,7 +5,7 @@ import os
 
 
 class NeuralNetwork:
-    def __init__(self, layer_sizes, batch_size=256, epochs=15,
+    def __init__(self, layer_sizes, batch_size=256, epochs=10,
                  model_path='/tmp/model.ckpt'):
         self.h_layers = []
         self.layer_sizes = layer_sizes
@@ -46,7 +46,7 @@ class NeuralNetwork:
             self.out_layer['biases']
         )
 
-    def train(self, data, labels):
+    def fit(self, data, labels):
         prediction = self.model(self.x)
 
         cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=self.y))
@@ -80,7 +80,7 @@ class NeuralNetwork:
 
             print('\nTraining finished, model saved in: ', self.model_path)
 
-    def test(self, data, labels):
+    def score(self, data, labels):
         saver = tf.train.Saver()
 
         with tf.Session() as sess:
