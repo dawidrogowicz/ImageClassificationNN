@@ -4,8 +4,8 @@ import numpy as np
 from PIL import Image
 from sklearn.model_selection import train_test_split
 from NeuralNetwork import NeuralNetwork
+from RNeuralNetwork import RecurrentNeuralNetwork
 import matplotlib.pyplot as plt
-import pickle
 
 
 def convert_image(img_path, grey_scale=False):
@@ -15,11 +15,16 @@ def convert_image(img_path, grey_scale=False):
     if width < height:
         img = img.rotate(90, expand=True, resample=Image.BILINEAR)
 
+    img = img.resize((45, 30), Image.ANTIALIAS)
+
     if grey_scale:
         img = img.convert('L')
+        pixel_data = img.getdata()
+    else:
+        img = img.convert('RGB')
+        pixel_data = np.array(img.getdata()).flatten()
 
-    img = img.resize((150, 100), Image.ANTIALIAS)
-    return img
+    return pixel_data
 
 
 def prepare_files(dir_in):
@@ -44,8 +49,8 @@ def prepare_files(dir_in):
                 print('\rSkipping file: ', file_path, ' (unsupported file extension)')
                 continue
 
-            img = convert_image(file_path, grey_scale=True)
-            x.append(list(img.getdata()))
+            pixel_data = convert_image(file_path, grey_scale=True)
+            x.append(list(pixel_data))
             y.append(category_dir)
         counter += 1
 
@@ -54,14 +59,7 @@ def prepare_files(dir_in):
 
 original_data_path = '101_ObjectCategories'
 
-if os.path.isfile('preprocessed_data.pickle'):
-    with open('preprocessed_data.pickle', 'rb') as f:
-        data_x, labels = pickle.load(f)
-else:
-    data_x, labels = prepare_files(original_data_path)
-    with open('preprocessed_data.pickle', 'wb') as f:
-        pickle.dump([data_x, labels], f)
-
+data_x, labels = prepare_files(original_data_path)
 print('\nData obtained')
 
 label_indexes = {}
@@ -78,9 +76,13 @@ print('Created labels from dictionary')
 train_X, test_X, train_y, test_y = train_test_split(data_x, data_y, test_size=.1)
 
 no_pixels = np.shape(data_x)[1]
-layer_sizes = [no_pixels, 5000, 5000, 5000, no_categories]
 
-clf = NeuralNetwork(layer_sizes, model_path='./model.ckpt', epochs=20)
+layer_sizes = [no_pixels, 500, 500, 500, no_categories]
+
+nn = NeuralNetwork(layer_sizes, model_path='./model.ckpt')
+rnn = RecurrentNeuralNetwork(128, no_categories, 45, 30,  model_path='./model_rnn.ckpt', epochs=10)
+
+clf = rnn
 
 print('Training model')
 clf.train(train_X, train_y)
